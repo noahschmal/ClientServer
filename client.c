@@ -260,7 +260,7 @@ void receiving(int server_fd)
 void receive_file(int client_fd) {
     int n;
     FILE *fp;
-    char *filename = "recv.c";
+    char *filename = "recv_client.txt";
     char buffer[SIZE];
 
     fp = fopen(filename, "w");
@@ -282,7 +282,7 @@ void send_file(user server, user host) {
 
     // file stuff and things
     FILE *fp;
-    char *filename = "peer.c";
+    char *filename = "send.txt";
     fp = fopen(filename, "r");
     if (fp == NULL) {
         perror("[-]Error in reading file");

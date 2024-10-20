@@ -28,19 +28,14 @@ typedef struct connection {
     struct connection* next_connection;
 }connection;
 
-//typedef struct connection_server {
-//    struct connection* con;
-//    int* server;
-//}connection_server;
-
 void sending(user out, char* message);
-void receiving(int server_fd, connection* list);
-void *receive_thread(int s_fd, connection* list); //void *con);
-void create_network(user* host, int* server_fd, connection* list);
+void receiving(int server_fd, connection** list);
+void *receive_thread(int s_fd, connection** list); //void *con);
+void create_network(user* host, int* server_fd, connection** list);
 void send_file(user out, char* filename);
-void receive_file(connection* list, int server_fd);
+void receive_file(connection** list, int server_fd);
 void receive_message(int server_fd);
-void receive_client(connection* list, int client_fd);
+void receive_client(connection** list, int client_fd);
 
 
 int main(int argc, char const* argv[])
@@ -51,9 +46,9 @@ int main(int argc, char const* argv[])
     /////////////////////////////
 
     user host;
-    connection connection_list;
-    connection_list.connected_user = NULL;
-    connection_list.next_connection = NULL;
+    connection* connection_list = malloc(sizeof(connection));
+    connection_list->connected_user = NULL;
+    connection_list->next_connection = NULL;
 
     char hostbuffer[256];
     struct hostent *host_entry;
@@ -102,7 +97,7 @@ int main(int argc, char const* argv[])
     return 0;
 }
 
-void create_network(user* host, int* server_fd, connection* list) {
+void create_network(user* host, int* server_fd, connection** list) {
     ///////////////////////////////
     /* Create Server Information */
     ///////////////////////////////
@@ -143,14 +138,6 @@ void create_network(user* host, int* server_fd, connection* list) {
         exit(1);
     }
 
-    //connection_server pass;
-//    pass.con = list;
-//    pass.server = server_fd;
-
-//    // Create thread for server to accept connections on
-//    pthread_t tid;
-//    pthread_create(&tid, NULL, &receive_thread, &pass);
-
     receive_thread(*server_fd, list);
 }
 
@@ -171,9 +158,6 @@ void sending(user out, char* message)
     }
     printf("[+]Client socket created successfully.\n");
 
-    printf("port: %d\n", port);
-    printf("ip: %s\n", ip);
-
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = port;
     server_addr.sin_addr.s_addr = inet_addr(ip);
@@ -185,7 +169,7 @@ void sending(user out, char* message)
     }
     printf("[+]Connected to Server.\n");
 
-    send(client_fd, message, sizeof(message), 0);
+    send(client_fd, message, 255, 0);
 
     printf("[+]Message sent.\n");
     printf("[+]Closing the client connection.\n");
@@ -193,11 +177,9 @@ void sending(user out, char* message)
 }
 
 // Calling receiving every 2 seconds
-void *receive_thread(int s_fd, connection* list)//void *con)
+void *receive_thread(int s_fd, connection** list)//void *con)
 {
-//    connection_server cs = *(connection_server *) con;
-//    int s_fd = *cs.server;
-//    connection* list = cs.con;
+
     while (1)
     {
         sleep(2);
@@ -206,7 +188,7 @@ void *receive_thread(int s_fd, connection* list)//void *con)
 }
 
 //Receiving messages on our port
-void receiving(int server_fd, connection* list)
+void receiving(int server_fd, connection** list)
 {
     char strData[255];
     int client_socket = accept(server_fd, NULL, NULL);
@@ -220,24 +202,30 @@ void receiving(int server_fd, connection* list)
             receive_file(list, client_socket);
         } else if (strcmp(strData, "CONNECTION_INFO") == 0)
         {
-            receive_client(list, client_socket);
+            //receive_client(list, client_socket);
         } else {
 
             printf("%s\n", strData);
-            connection* head = list;
-            printf("name: %s\n", head->connected_user->name);
-            while (head->connected_user != NULL) {
-                sending(*head->connected_user, strData);
-                head = head->next_connection;
-            }
+
+            user test_user;
+            strcpy(test_user.SERVER_IP, "68.234.244.147");
+            test_user.port = 8081;
+            strcpy(test_user.name, "Noah");
+            sending(test_user, strData);
+
+//            connection* head = *list;
+//            while (head->connected_user != NULL) {
+//                sending(*head->connected_user, strData);
+//                head = head->next_connection;
+//            }
         }
     }
 }
 
-void receive_file(connection* list, int client_fd) {
+void receive_file(connection** list, int client_fd) {
     int n;
     FILE *fp;
-    char *filename = "recv.c";
+    char *filename = "recvserver.txt";
     char buffer[SIZE];
 
     fp = fopen(filename, "wb");
@@ -253,11 +241,17 @@ void receive_file(connection* list, int client_fd) {
     }
     fclose(fp);
 
-    connection* head = list;
-    while (head->connected_user != NULL) {
-        send_file(*head->connected_user, filename);
-        head = head->next_connection;
-    }
+//    connection* head = *list;
+//    while (head->connected_user != NULL) {
+//        send_file(*head->connected_user, filename);
+//        head = head->next_connection;
+//    }
+
+    user test_user;
+    strcpy(test_user.SERVER_IP, "68.234.244.147");
+    test_user.port = 8081;
+    strcpy(test_user.name, "Noah");
+    //send_file(test_user, filename);
     return;
 }
 
@@ -270,7 +264,6 @@ void send_file(user out, char* filename) {
         perror("[-]Error in reading file");
         exit(1);
     }
-
 
     char hello[1024] = {0};
 
@@ -290,7 +283,7 @@ void send_file(user out, char* filename) {
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = port;
-    server_addr.sin_addr.s_addr = inet_addr(ip);//INADDR_ANY;//inet_addr(ip);
+    server_addr.sin_addr.s_addr = inet_addr(ip);
 
     connectStatus = connect(client_fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
     if(connectStatus == -1) {
@@ -319,35 +312,45 @@ void send_file(user out, char* filename) {
     close(client_fd);
 }
 
-void receive_client(connection* list, int client_fd)
+void receive_client(connection** list, int client_fd)
 {
-    connection* head;
-    head->connected_user = malloc(sizeof(user));
-    head->next_connection = NULL;
+    connection head;
+    head.connected_user = malloc(sizeof(user));
+    head.next_connection = NULL;
+
+    sleep(1);
 
     char buffer[20];
     recv(client_fd, buffer, sizeof(buffer), 0); // NAME
-    strcpy(head->connected_user->name, buffer);
+    strcpy(head.connected_user->name, buffer);
+
+    strcpy(head.connected_user->name, "Noah");
 
     bzero(buffer, sizeof(buffer)); // memset()
 
     recv(client_fd, buffer, sizeof(buffer), 0); // IP
-    strcpy(head->connected_user->SERVER_IP, buffer);
+    strcpy(head.connected_user->SERVER_IP, buffer);
+
+    strcpy(head.connected_user->SERVER_IP, "68.234.244.147");
 
     bzero(buffer, sizeof(buffer)); // memset()
 
     recv(client_fd, buffer, sizeof(buffer), 0); // PORT
-    head->connected_user->port = atoi(buffer);
+    head.connected_user->port = atoi(buffer);
+
+    head.connected_user->port = 8081;
 
     bzero(buffer, sizeof(buffer)); // memset()
 
-    connection* it = list;
+    connection* it = *list;
     if (it->connected_user == NULL) {
-        list = head;
+        *list = &head;
+        printf("new head\n");
     } else {
+        printf("existing head\n");
         while (it->next_connection != NULL) {
             it = it->next_connection;
         }
-        it->next_connection = head;
+        it->next_connection = &head;
     }
 }
